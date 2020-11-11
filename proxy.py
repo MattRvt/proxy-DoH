@@ -45,6 +45,8 @@ def convertEncoding(encodedValue):
     decodedValue = base64.b64decode(encodedValue)
     return decodedValue
 
+def stringToHex(string)
+    #TODO: convert string to it's hexa notation
 
 def sendDNSRequest(DNSipAddress,lookedForName,requestType):
     """envoie une requete DNS"""
@@ -55,7 +57,23 @@ def sendDNSRequest(DNSipAddress,lookedForName,requestType):
     # construction du packet header + QNAME + QTYPE + QCLASS*
     
     #header
+    ID = generateID()
+        #flags
+    QR = 0 #It’s a query
+    OPCODE = 0 #Standard query
+    TC = 0 #Not truncated
+    RD = 1 #Recursion requested
+    RA = 0 #Not meaningful for query
+    Z = 0 #Reserved
+    RCODE = 0 #Not meaningful for query
     
+    QDCOUNT = 0x0001 #One question follows
+    ANCOUNT = 0x0000 #No answers follow
+    NSCOUNT = 0x0000 #No records follow
+    ARCOUNT = 0x0000 #No additional records follow
+
+
+
     #qname part
 
     #qtype
