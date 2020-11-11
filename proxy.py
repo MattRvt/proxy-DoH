@@ -1,13 +1,24 @@
 #!/usr/bin/python
 # -*-coding:Latin-1 -*
 
-# imports
+########## imports
 import socket
+from BaseHTTPServer import BaseHTTPRequestHandler
+from StringIO import StringIO
 
+########## class
+class HTTPRequest(BaseHTTPRequestHandler):
+    def __init__(self, request_text):
+        self.rfile = StringIO(request_text)
+        self.raw_requestline = self.rfile.readline()
+        self.error_code = self.error_message = None
+        self.parse_request()
 
+    def send_error(self, code, message):
+        self.error_code = code
+        self.error_message = message
 
-
-# functions
+########## functions
 
 
 def convertEncoding():
@@ -36,8 +47,8 @@ def askToCache():
     # TODO: relir sujet avant de faire
 
 
-# main
-if __name__ == __main__:
+########## main
+if __name__ == "__main__":
     print "en attente d'une connexion.."
     ADRESSE = ''
     PORT = 80
@@ -61,6 +72,16 @@ if __name__ == __main__:
         Host: 1.2.3.54
         Accept: application/dns-message
         """
+        requestFromClient = HTTPRequest(donnees)
+        if (requestFromClient.command != "GET"):
+            print 'ERROR: Method must be GET'
+            exit(1)
+        
+        #TODO: gere le cas de DNS ecrit en majuscule dans la requete
+        print(requestFromClient.headers.keys())
+        if ("dns" not in requestFromClient.headers.keys()):
+            print 'ERROR: DNS value not found'
+        
         # changer le codage pour revenir au codage binaire classique des requêtes DNS
 
         # envoyer la requête DNS au résolveur (dont l'adresse se trouve dans le fichier "/etc/resolv.conf" de boxa).

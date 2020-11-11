@@ -1,4 +1,8 @@
 #!/usr/bin/env python
+"""
+source: https://stackoverflow.com/questions/4685217/parse-raw-http-headers
+"""
+
 from BaseHTTPServer import BaseHTTPRequestHandler
 from StringIO import StringIO
 
