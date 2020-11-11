@@ -5,6 +5,11 @@
 import socket
 from BaseHTTPServer import BaseHTTPRequestHandler
 from StringIO import StringIO
+import urlparse
+import base64
+
+########## constant
+PARAMETER_NAME = 'dns'
 
 ########## class
 class HTTPRequest(BaseHTTPRequestHandler):
@@ -19,10 +24,25 @@ class HTTPRequest(BaseHTTPRequestHandler):
         self.error_message = message
 
 ########## functions
+def waitForConnection():
+    """attend une connexion et return les donnes recu"""
+    print "en attente d'une connexion.."
+    ADRESSE = ''
+    PORT = 80
 
+    serveur = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    serveur.bind((ADRESSE, PORT))
+    serveur.listen(1)
 
-def convertEncoding():
+    client, adresseClient = serveur.accept()
+    print 'Connexion de ', adresseClient
+    donnees = client.recv(1024)
+    return donnes
+
+def convertEncoding(encodedValue):
     """change le codage pour revenir au codage binaire classique des requêtes DNS"""
+    #TODO: CF sujet le truc des 2 derniers caracters
+    decodedValue = base64.b64decode(encodedValue)
 
 
 def sendDNSRequest(name, socket):
@@ -30,7 +50,7 @@ def sendDNSRequest(name, socket):
     # TODO: La requête DNS envoyée au résolveur doit respecter le protocole DNS et contenir un champ ID différent pour chaque requête pour assurer la correspondance requête/réponse qui n'est pas donnée dans le protocole DNS classique en UDP.
 
 
-def sendHTTPRequest(data, socket):
+def sendHTTPRequest(data, client):
     """envoie une requete HTTP"""
     # TODO: La réponse HTTP doit être au format suivant :
     # "
@@ -41,61 +61,74 @@ def sendHTTPRequest(data, socket):
     # réponse_dns
     # "
 
+    print 'Envoi de :' + reponse
+    n = client.send(reponse)
+    if (n != len(reponse)):
+        print 'Erreur envoi.'
+    else:
+        print 'Envoi ok.'
+
 
 def askToCache():
     """part3: si le nom est present dans le cache, renvoie l'ip associé si non renvoi 0"""
     # TODO: relir sujet avant de faire
 
 
+
 ########## main
 if __name__ == "__main__":
-    print "en attente d'une connexion.."
-    ADRESSE = ''
-    PORT = 80
-
-    serveur = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    serveur.bind((ADRESSE, PORT))
-    serveur.listen(1)
-
     # réceptionner la requête transmise par le client,
-    client, adresseClient = serveur.accept()
-    print 'Connexion de ', adresseClient
+    #TODO: donnees = waitForConnection()
+    
+    donnees = (
+        'GET /?dns=AAABAAABAAAAAAAABGJsdWUDbmV0AAAPAAE= HTTP/1.0\r\n'
+        'Host: 1.2.3.54\r\n'
+        'Accept: application/dns-message\r\n'
+    )
+    
 
-    donnees = client.recv(1024)
     if not donnees:
         print 'Erreur de reception.'
     else:
-        print 'Reception de:\n' + donnees
-        # TODO: message derreur si requete non valide => lorsque la requête HTTP n'est pas GET, ou lorsque l'url ne contient pas de variable "dns".
-        """
-        GET /?dns=AAABAAABAAAAAAAABGJsdWUDbmV0AAAPAAE= HTTP/1.0
-        Host: 1.2.3.54
-        Accept: application/dns-message
-        """
+        print 'Reception de:\n'
         requestFromClient = HTTPRequest(donnees)
+        print(requestFromClient.error_code)          #None
+        print(requestFromClient.command)             #GET
+        print(requestFromClient.path)                #/?dns=AAABAAABAAAAAAAABmRvbWFpbgRuYW1lAAAPAAE=
+        print(requestFromClient.request_version)     #HTTP/1.0
+        print(len(requestFromClient.headers))        #2
+        print(requestFromClient.headers.keys())      #['host', 'accept']
+        print(requestFromClient.headers['host'])     #1.2.3.54
+
+
+
+        # TODO: message derreur si requete non valide => lorsque la requête HTTP n'est pas GET, ou lorsque l'url ne contient pas de variable "dns".
         if (requestFromClient.command != "GET"):
             print 'ERROR: Method must be GET'
             exit(1)
-        
+
         #TODO: gere le cas de DNS ecrit en majuscule dans la requete
-        print(requestFromClient.headers.keys())
-        if ("dns" not in requestFromClient.headers.keys()):
-            print 'ERROR: DNS value not found'
+        url = requestFromClient.path
         
-        # changer le codage pour revenir au codage binaire classique des requêtes DNS
+        parsed = urlparse.urlparse(url)
+        params = urlparse.parse_qs(parsed.query)
+
+
+
+        if (PARAMETER_NAME not in params):
+            print 'ERROR: DNS value not found'
+            exit(1)
+        
+        # change le codage pour revenir au codage binaire classique des requêtes DNS
+        domainName = convertEncoding(params[PARAMETER_NAME][0])
 
         # envoyer la requête DNS au résolveur (dont l'adresse se trouve dans le fichier "/etc/resolv.conf" de boxa).
+
 
         # Ce résolveur s'occupera de faire la séquence de requêtes itératives permettant d'obtenir la réponse
 
         # Une fois la réponse DNS obtenue du résolveur, le message doit être transmis au client via une réponse HTTP.
-        reponse = donnees.upper()
-        # print 'Envoi de :' + reponse
-        n = client.send(reponse)
-        if (n != len(reponse)):
-            print 'Erreur envoi.'
-        else:
-            print 'Envoi ok.'
+        #TODO: sendHTTP(data)
 
     print 'Fermeture de la connexion avec le client.'
     client.close()
