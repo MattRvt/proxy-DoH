@@ -5,11 +5,11 @@
 import socket
 from BaseHTTPServer import BaseHTTPRequestHandler
 from StringIO import StringIO
-import urlparse
 import base64
 
 ########## constant
 PARAMETER_NAME = 'dns'
+DEFAULT_DNS_PORT = 53
 
 ########## class
 class HTTPRequest(BaseHTTPRequestHandler):
@@ -43,11 +43,37 @@ def convertEncoding(encodedValue):
     """change le codage pour revenir au codage binaire classique des requêtes DNS"""
     #TODO: CF sujet le truc des 2 derniers caracters
     decodedValue = base64.b64decode(encodedValue)
+    return decodedValue
 
 
-def sendDNSRequest(name, socket):
+def sendDNSRequest(DNSipAddress,lookedForName,requestType):
     """envoie une requete DNS"""
     # TODO: La requête DNS envoyée au résolveur doit respecter le protocole DNS et contenir un champ ID différent pour chaque requête pour assurer la correspondance requête/réponse qui n'est pas donnée dans le protocole DNS classique en UDP.
+    
+    lookedForName = lookedForName.split(".")
+
+    # construction du packet header + QNAME + QTYPE + QCLASS*
+    
+    #header
+    
+    #qname part
+
+    #qtype
+
+    #qclass
+
+
+     # Send request message to server
+     # print(raw_bytes)
+    bytes_send = s.sendto(raw_bytes,server_address)
+
+    # Receive message from server
+    max_bytes = 4096
+    (raw_bytes2,src_addr) = s.recvfrom(max_bytes)
+
+    print(raw_bytes2)    
+    
+    
 
 
 def sendHTTPRequest(data, client):
@@ -67,6 +93,17 @@ def sendHTTPRequest(data, client):
         print 'Erreur envoi.'
     else:
         print 'Envoi ok.'
+
+def getDNSaddr(resolvCondPath):
+  """recupere l'adresse de couche transport du serveur DNS DoH depuis le fichier /etc/resolv.conf"""
+  resolvconf = open(resolvCondPath, "r")
+  lines = resolvconf.readlines()
+  i=0
+  while lines[i].split()[0]<>'nameserver':
+    i=i+1
+  server = lines[i].split()[1]
+  resolvconf.close()
+  return (server,80)
 
 
 def askToCache():
@@ -110,20 +147,28 @@ if __name__ == "__main__":
         #TODO: gere le cas de DNS ecrit en majuscule dans la requete
         url = requestFromClient.path
         
-        parsed = urlparse.urlparse(url)
-        params = urlparse.parse_qs(parsed.query)
+        #TODO: querry string pars ne fonctionnement pas dans le lab
+        #parsed = urlparse(url)
+        #params = parse_qs(parsed.query)
 
 
 
-        if (PARAMETER_NAME not in params):
-            print 'ERROR: DNS value not found'
-            exit(1)
+        #if (PARAMETER_NAME not in params):
+        #    print 'ERROR: DNS value not found'
+        #    exit(1)
         
         # change le codage pour revenir au codage binaire classique des requêtes DNS
-        domainName = convertEncoding(params[PARAMETER_NAME][0])
-
+        #TODO: gere le type de requete (mx,...)
+        #domainName = convertEncoding(params[PARAMETER_NAME][0])
+        domainName = convertEncoding('AAABAAABAAAAAAAABGJsdWUDbmV0AAAPAAE=')
         # envoyer la requête DNS au résolveur (dont l'adresse se trouve dans le fichier "/etc/resolv.conf" de boxa).
-
+        #TODO: dnsAddr = getDNSaddr("/etc/resolv.conf") #TODO: verifier si .net manquant
+        dnsAddr = "1.2.3.4"
+        requestType = "MX"
+        # Create UDP socket
+        dnsSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        #dnsSocket.connect((dnsAddr, DEFAULT_DNS_PORT))
+        sendDNSRequest(dnsSocket,domainName,requestType)
 
         # Ce résolveur s'occupera de faire la séquence de requêtes itératives permettant d'obtenir la réponse
 
@@ -134,3 +179,4 @@ if __name__ == "__main__":
     client.close()
     print 'Arret du serveur.'
     serveur.close()
+    dnsSocket.close()
