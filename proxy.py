@@ -101,6 +101,7 @@ def sendDNSRequest(DNSipAddress,lookedForName,requestType):
     #TODO: format data
     lookedForName = lookedForName.split(".")
     data = 0x0
+    totalLenght = 0
     for part in lookedForName:
         #convert to bin
         binStr = [ord(c) for c in part]
@@ -109,19 +110,19 @@ def sendDNSRequest(DNSipAddress,lookedForName,requestType):
         for char in binStr:
             charOffset = charOffset - 8
             binPart =  binPart | (char<<charOffset)
-
+        #TODO: ajouter longeur chaine 
+        totalLenght = totalLenght + len(part)
         data = (data<<len(part)*8) | binPart
 
-    
-    #TODO binaryPacket =
-    
+    #TODO: verifier ordre blue.net et pas net.blue
+    #totalLenght * 2 car chaque char est codé sur 2 oct + 2oct pour la longeur de chaque partie
+    dataSize = totalLenght*2+len(lookedForName)*2
+    binaryPacket = (header<<dataSize) | data
 
-
-    print bin(header)
 
      # Send request message to server
      # print(raw_bytes)
-    bytes_send = s.sendto(raw_bytes,server_address)
+    bytes_send = s.sendto(binaryPacket,server_address)
 
     # Receive message from server
     max_bytes = 4096
