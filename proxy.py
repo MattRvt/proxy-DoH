@@ -57,7 +57,6 @@ def sendDNSRequest(DNSipAddress,lookedForName,requestType):
     """envoie une requete DNS"""
     # TODO: La requête DNS envoyée au résolveur doit respecter le protocole DNS et contenir un champ ID différent pour chaque requête pour assurer la correspondance requête/réponse qui n'est pas donnée dans le protocole DNS classique en UDP.
     
-    lookedForName = lookedForName.split(".")
 
     # construction du packet header + QNAME + QTYPE + QCLASS*
     
@@ -100,8 +99,22 @@ def sendDNSRequest(DNSipAddress,lookedForName,requestType):
 
 
     #TODO: format data
-    #TODO binaryPacket =
+    lookedForName = lookedForName.split(".")
+    data = 0x0
+    for part in lookedForName:
+        #convert to bin
+        binStr = [ord(c) for c in part]
+        charOffset = len(part)*8
+        binPart = 0x0
+        for char in binStr:
+            charOffset = charOffset - 8
+            binPart =  binPart | (char<<charOffset)
 
+        data = (data<<len(part)*8) | binPart
+
+    
+    #TODO binaryPacket =
+    
 
 
     print bin(header)
@@ -203,7 +216,8 @@ if __name__ == "__main__":
         # change le codage pour revenir au codage binaire classique des requêtes DNS
         #TODO: gere le type de requete (mx,...)
         #domainName = convertEncoding(params[PARAMETER_NAME][0])
-        domainName = convertEncoding('AAABAAABAAAAAAAABGJsdWUDbmV0AAAPAAE=')
+        #TODO: domainName = convertEncoding('AAABAAABAAAAAAAABGJsdWUDbmV0AAAPAAE=')
+        domainName = "blue.net"
         # envoyer la requête DNS au résolveur (dont l'adresse se trouve dans le fichier "/etc/resolv.conf" de boxa).
         #TODO: dnsAddr = getDNSaddr("/etc/resolv.conf") #TODO: verifier si .net manquant
         dnsAddr = "1.2.3.4"
