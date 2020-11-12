@@ -6,6 +6,7 @@ import socket
 from BaseHTTPServer import BaseHTTPRequestHandler
 from StringIO import StringIO
 import base64
+import binascii
 
 ########## constant
 PARAMETER_NAME = 'dns'
@@ -53,7 +54,7 @@ def generateID():
     #TODO: generate a unique ID
     return 0xdb42
 
-def sendDNSRequest(DNSipAddress,lookedForName,requestType):
+def sendDNSRequest(dnsAddr,lookedForName,requestType):
     """envoie une requete DNS"""
     # TODO: La requête DNS envoyée au résolveur doit respecter le protocole DNS et contenir un champ ID différent pour chaque requête pour assurer la correspondance requête/réponse qui n'est pas donnée dans le protocole DNS classique en UDP.
     
@@ -71,17 +72,7 @@ def sendDNSRequest(DNSipAddress,lookedForName,requestType):
 
 
 
-    #TODO: qname part
-    #data = ''
-    #for part in lookedForName:
-    #    data + stringToHex(len(part))
-    #    data + stringToHex(part)
-    data = 0x00
-    #qtype
-    #TODO: A,MX,NS
-    QTYPE = 0x0001
-    #qclass
-    QCLASS = 0x0001
+    
 
 
     IDOffset = 80
@@ -113,24 +104,53 @@ def sendDNSRequest(DNSipAddress,lookedForName,requestType):
         totalLenght = totalLenght + len(part)
         binPart = binPart | (len(part)<<len(part)*8)
         data = (data<<len(part)*8+4) | binPart
-
-    #TODO: verifier ordre blue.net et pas net.blue
     #totalLenght * 2 car chaque char est codé sur 2 oct + 2oct pour la longeur de chaque partie le tout fois 8 car 1 octet = 8 bit
     dataSize = (totalLenght*2+len(lookedForName)*2)*8
     binaryPacket = (header<<dataSize) | data
 
+    #TODO: A,MX,NS
+    QTYPE = 0x0001
+    #qclass
+    QCLASS = 0x0001
+    dataSize = 4*8
+    binaryPacket = (binaryPacket<<dataSize) | QTYPE
+    binaryPacket = (binaryPacket<<dataSize) | QCLASS
 
+
+    n = int(bin(binaryPacket)[2:], 2)
+    binaryPacket = binascii.unhexlify('%x' % n)
      # Send request message to server
-     # print(raw_bytes)
-    bytes_send = s.sendto(binaryPacket,server_address)
+    dnsSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    bytes_send = dnsSocket.sendto(binaryPacket,(dnsAddr, DEFAULT_DNS_PORT))
 
     # Receive message from server
     max_bytes = 4096
-    (raw_bytes2,src_addr) = s.recvfrom(max_bytes)
-
+    (raw_bytes2,src_addr) = dnsSocket.recvfrom(max_bytes)
+    print "from:" 
+    print src_addr
+    print "data:"
     print(raw_bytes2)    
     
-    
+def bin(x):
+    """
+    bin(number) -> string
+
+    Stringifies an int or long in base 2.
+    """
+    if x < 0: 
+        return '-' + bin(-x)
+    out = []
+    if x == 0: 
+        out.append('0')
+    while x > 0:
+        out.append('01'[x & 1])
+        x >>= 1
+        pass
+    try: 
+        return '0b' + ''.join(reversed(out))
+    except NameError, ne2: 
+        out.reverse()
+    return '0b' + ''.join(out)
 
 
 def sendHTTPRequest(data, client):
@@ -223,10 +243,8 @@ if __name__ == "__main__":
         #TODO: dnsAddr = getDNSaddr("/etc/resolv.conf") #TODO: verifier si .net manquant
         dnsAddr = "1.2.3.4"
         requestType = "MX"
-        # Create UDP socket
-        dnsSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        #dnsSocket.connect((dnsAddr, DEFAULT_DNS_PORT))
-        sendDNSRequest(dnsSocket,domainName,requestType)
+        # Create UDP socket #TODO: SOCK_DGRAM ou SOCK_STREAM
+        sendDNSRequest(dnsAddr,domainName,requestType)
 
         # Ce résolveur s'occupera de faire la séquence de requêtes itératives permettant d'obtenir la réponse
 
