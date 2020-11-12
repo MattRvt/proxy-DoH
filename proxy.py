@@ -45,8 +45,13 @@ def convertEncoding(encodedValue):
     decodedValue = base64.b64decode(encodedValue)
     return decodedValue
 
-def stringToHex(string)
+def stringToHex(string):
     #TODO: convert string to it's hexa notation
+    return hex(string)
+
+def generateID():
+    #TODO: generate a unique ID
+    return 0xdb42
 
 def sendDNSRequest(DNSipAddress,lookedForName,requestType):
     """envoie une requete DNS"""
@@ -58,28 +63,48 @@ def sendDNSRequest(DNSipAddress,lookedForName,requestType):
     
     #header
     ID = generateID()
-        #flags
-    QR = 0 #It’s a query
-    OPCODE = 0 #Standard query
-    TC = 0 #Not truncated
-    RD = 1 #Recursion requested
-    RA = 0 #Not meaningful for query
-    Z = 0 #Reserved
-    RCODE = 0 #Not meaningful for query
-    
+    FLAGS = 0x0100
+
     QDCOUNT = 0x0001 #One question follows
-    ANCOUNT = 0x0000 #No answers follow
+    ANCOUNT = 0x0000 #No answers follow 
     NSCOUNT = 0x0000 #No records follow
     ARCOUNT = 0x0000 #No additional records follow
 
 
 
-    #qname part
-
+    #TODO: qname part
+    #data = ''
+    #for part in lookedForName:
+    #    data + stringToHex(len(part))
+    #    data + stringToHex(part)
+    data = 0x00
     #qtype
-
+    #TODO: A,MX,NS
+    QTYPE = 0x0001
     #qclass
+    QCLASS = 0x0001
 
+
+    IDOffset = 80
+    flagsOffset = IDOffset - 16
+    qdCountOffset = flagsOffset - 16
+    anCountOffset = qdCountOffset -16
+    nscountOffset = anCountOffset - 16
+    arCountOffset = nscountOffset - 16
+    header = (ID<<IDOffset) 
+    header = header | (FLAGS<<flagsOffset) 
+    header = header | (QDCOUNT<<qdCountOffset) 
+    header = header | (ANCOUNT<<anCountOffset) 
+    header = header | (NSCOUNT<<nscountOffset) 
+    header = header | (ARCOUNT<<arCountOffset)
+
+
+    #TODO: format data
+    #TODO binaryPacket =
+
+
+
+    print bin(header)
 
      # Send request message to server
      # print(raw_bytes)
