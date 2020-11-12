@@ -106,12 +106,13 @@ def sendDNSRequest(DNSipAddress,lookedForName,requestType):
         #convert to bin
         binStr = [ord(c) for c in part]
         charOffset = len(part)*8
-        binPart = len(part)
+        binPart = 0
         for char in binStr:
             charOffset = charOffset - 8
             binPart =  binPart | (char<<charOffset)
         totalLenght = totalLenght + len(part)
-        data = (data<<len(part)*8) | binPart
+        binPart = binPart | (len(part)<<len(part)*8)
+        data = (data<<len(part)*8+4) | binPart
 
     #TODO: verifier ordre blue.net et pas net.blue
     #totalLenght * 2 car chaque char est codé sur 2 oct + 2oct pour la longeur de chaque partie le tout fois 8 car 1 octet = 8 bit
