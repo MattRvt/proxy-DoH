@@ -1,6 +1,18 @@
 #!/usr/bin/python
 # -*-coding:Latin-1 -*
 
+"""
+pour ecouter entre proxy et dns
+vdump "colla" | wireshark -i - -k &
+
+pour ecouter entre proxy et alice
+vdump "lana" | wireshark -i - -k &
+
+
+./senddns.py -t NS blue.net
+"""
+
+
 ########## imports
 import socket
 from BaseHTTPServer import BaseHTTPRequestHandler
@@ -9,7 +21,6 @@ import base64
 import binascii
 
 ########## constant
-PARAMETER_NAME = 'dns'
 DEFAULT_DNS_PORT = 53
 
 ########## class
@@ -25,20 +36,42 @@ class HTTPRequest(BaseHTTPRequestHandler):
         self.error_message = message
 
 ########## functions
-def waitForConnection():
+def findaddrserver():
+  """recupere l'adresse de couche transport du proxy DoH depuis le fichier /etc/resolv.conf"""
+  resolvconf = open("/etc/resolv.conf", "r")
+  lines = resolvconf.readlines()
+  i=0
+  while lines[i].split()[0]<>'nameserver':
+    i=i+1
+  server = lines[i].split()[1]
+  resolvconf.close()
+  return (server,80)
+
+def sendDoh(data,s,server):
+    path="?dns="+data
+    mystring = """:status= 200
+Content-Type: application/dns-message
+
+%s""" % (data)
+    print 'sent HTTP request'
+    print mystring
+    s.send(mystring)
+
+
+def waitForConnection(socket):
     """attend une connexion et return les donnes recu"""
     print "en attente d'une connexion.."
     ADRESSE = ''
     PORT = 80
 
-    serveur = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    serveur = socket
     serveur.bind((ADRESSE, PORT))
     serveur.listen(1)
 
     client, adresseClient = serveur.accept()
     print 'Connexion de ', adresseClient
     donnees = client.recv(1024)
-    return donnes
+    return donnees,client
 
 def convertEncoding(encodedValue):
     """change le codage pour revenir au codage binaire classique des requêtes DNS"""
@@ -153,23 +186,7 @@ def bin(x):
     return '0b' + ''.join(out)
 
 
-def sendHTTPRequest(data, client):
-    """envoie une requete HTTP"""
-    # TODO: La réponse HTTP doit être au format suivant :
-    # "
-    # HTTP/1.0 200 OK
-    # Content-Type: application/dns-message
-    # Content-Length: taille_de_la_réponse
-    #
-    # réponse_dns
-    # "
 
-    print 'Envoi de :' + reponse
-    n = client.send(reponse)
-    if (n != len(reponse)):
-        print 'Erreur envoi.'
-    else:
-        print 'Envoi ok.'
 
 def getDNSaddr(resolvCondPath):
   """recupere l'adresse de couche transport du serveur DNS DoH depuis le fichier /etc/resolv.conf"""
@@ -191,20 +208,23 @@ def askToCache():
 
 ########## main
 if __name__ == "__main__":
-    # réceptionner la requête transmise par le client,
-    #TODO: donnees = waitForConnection()
+    # réceptionner la requête transmise par le client
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    (donnees,client) = waitForConnection(server)
     
-    donnees = (
-        'GET /?dns=AAABAAABAAAAAAAABGJsdWUDbmV0AAAPAAE= HTTP/1.0\r\n'
-        'Host: 1.2.3.54\r\n'
-        'Accept: application/dns-message\r\n'
-    )
+    #donnees = (
+    #    'GET /?dns=AAABAAABAAAAAAAABGJsdWUDbmV0AAAPAAE= HTTP/1.0\r\n'
+    #    'Host: 1.2.3.54\r\n'
+    #    'Accept: application/dns-message\r\n'
+    #)
     
 
     if not donnees:
         print 'Erreur de reception.'
     else:
-        print 'Reception de:\n'
+        print 'raw data:'
+        print donnees
+        print 'parsed data:\n'
         requestFromClient = HTTPRequest(donnees)
         print(requestFromClient.error_code)          #None
         print(requestFromClient.command)             #GET
@@ -223,34 +243,46 @@ if __name__ == "__main__":
 
         #TODO: gere le cas de DNS ecrit en majuscule dans la requete
         url = requestFromClient.path
-        
-        #TODO: querry string pars ne fonctionnement pas dans le lab
-        #parsed = urlparse(url)
-        #params = parse_qs(parsed.query)
+        if "DNS".upper() not in url.upper():
+            print 'ERROR: Must contains parm DNS'
+            exit(1)
 
-
-
-        #if (PARAMETER_NAME not in params):
-        #    print 'ERROR: DNS value not found'
-        #    exit(1)
+        params = url.split('dns=')
         
         # change le codage pour revenir au codage binaire classique des requêtes DNS
+        request = convertEncoding(params[1])
+        #TODO: dnsaddr
+        dnsAddr = "1.2.3.4"
+        dnsSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        bytes_send = dnsSocket.sendto(request,(dnsAddr, DEFAULT_DNS_PORT))
+
         #TODO: gere le type de requete (mx,...)
-        #domainName = convertEncoding(params[PARAMETER_NAME][0])
-        #TODO: domainName = convertEncoding('AAABAAABAAAAAAAABGJsdWUDbmV0AAAPAAE=')
-        domainName = "blue.net"
+         # Receive message from server
+          
         # envoyer la requête DNS au résolveur (dont l'adresse se trouve dans le fichier "/etc/resolv.conf" de boxa).
         #TODO: dnsAddr = getDNSaddr("/etc/resolv.conf") #TODO: verifier si .net manquant
-        dnsAddr = "1.2.3.4"
-        requestType = "MX"
+        #dnsAddr = "1.2.3.4"
+        #requestType = "MX"
         # Create UDP socket #TODO: SOCK_DGRAM ou SOCK_STREAM
-        sendDNSRequest(dnsAddr,domainName,requestType)
+        #sendDNSRequest(dnsAddr,domainName,requestType)
 
         # Ce résolveur s'occupera de faire la séquence de requêtes itératives permettant d'obtenir la réponse
 
         # Une fois la réponse DNS obtenue du résolveur, le message doit être transmis au client via une réponse HTTP.
-        #TODO: sendHTTP(data)
+        max_bytes = 4096
+        #TODO: pas de reponse du dns
+        print "attente d'une reponse du serveur DNS"
+        (raw_bytes2,src_addr) = dnsSocket.recvfrom(max_bytes)
+        print "from (dns addr):" 
+        print src_addr
+        print "data:"
+        print(raw_bytes2)
 
+        server,port=findaddrserver()
+        #TODO base64.urlsafe_b64encode(raw_bytes2)
+        encodedAnswer = base64.b64encode(raw_bytes2, '-_')
+        print encodedAnswer
+        sendDoh(encodedAnswer,client,requestFromClient.headers['host'])
     print 'Fermeture de la connexion avec le client.'
     client.close()
     print 'Arret du serveur.'
