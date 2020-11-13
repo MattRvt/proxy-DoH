@@ -280,11 +280,10 @@ if __name__ == "__main__":
 
         server,port=findaddrserver()
         #TODO base64.urlsafe_b64encode(raw_bytes2)
-        encodedAnswer = base64.b64encode(raw_bytes2, '-_')
-        print encodedAnswer
-        sendDoh(encodedAnswer,client,requestFromClient.headers['host'])
+        #encodedAnswer = base64.b64encode(raw_bytes2, '-_')
+        sendDoh(raw_bytes2,client,requestFromClient.headers['host'])
     print 'Fermeture de la connexion avec le client.'
     client.close()
     print 'Arret du serveur.'
-    serveur.close()
+    server.close()
     dnsSocket.close()
