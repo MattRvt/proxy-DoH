@@ -47,7 +47,10 @@ def findaddrserver():
   resolvconf.close()
   return (server,80)
 
-def sendDoh(data,s,server):
+def sendDoh(data,s):
+    """
+    envoie les donnes data sur la socket s
+    """
     path="?dns="+data
     mystring = """:status= 200
 Content-Type: application/dns-message
@@ -72,12 +75,6 @@ def waitForConnection(socket):
     print 'Connexion de ', adresseClient
     donnees = client.recv(1024)
     return donnees,client
-
-def convertEncoding(encodedValue):
-    """change le codage pour revenir au codage binaire classique des requêtes DNS"""
-    #TODO: CF sujet le truc des 2 derniers caracters
-    decodedValue = base64.b64decode(encodedValue)
-    return decodedValue
 
 def stringToHex(string):
     #TODO: convert string to it's hexa notation
@@ -187,19 +184,6 @@ def bin(x):
 
 
 
-
-def getDNSaddr(resolvCondPath):
-  """recupere l'adresse de couche transport du serveur DNS DoH depuis le fichier /etc/resolv.conf"""
-  resolvconf = open(resolvCondPath, "r")
-  lines = resolvconf.readlines()
-  i=0
-  while lines[i].split()[0]<>'nameserver':
-    i=i+1
-  server = lines[i].split()[1]
-  resolvconf.close()
-  return (server,80)
-
-
 def askToCache():
     """part3: si le nom est present dans le cache, renvoie l'ip associé si non renvoi 0"""
     # TODO: relir sujet avant de faire
@@ -222,26 +206,24 @@ if __name__ == "__main__":
     if not donnees:
         print 'Erreur de reception.'
     else:
-        print 'raw data:'
-        print donnees
-        print 'parsed data:\n'
         requestFromClient = HTTPRequest(donnees)
-        print(requestFromClient.error_code)          #None
-        print(requestFromClient.command)             #GET
-        print(requestFromClient.path)                #/?dns=AAABAAABAAAAAAAABmRvbWFpbgRuYW1lAAAPAAE=
-        print(requestFromClient.request_version)     #HTTP/1.0
-        print(len(requestFromClient.headers))        #2
-        print(requestFromClient.headers.keys())      #['host', 'accept']
-        print(requestFromClient.headers['host'])     #1.2.3.54
+
+        #print(requestFromClient.error_code)          #None
+        #print(requestFromClient.command)             #GET
+        #print(requestFromClient.path)                #/?dns=AAABAAABAAAAAAAABmRvbWFpbgRuYW1lAAAPAAE=
+        #print(requestFromClient.request_version)     #HTTP/1.0
+        #print(len(requestFromClient.headers))        #2
+        #print(requestFromClient.headers.keys())      #['host', 'accept']
+        #print(requestFromClient.headers['host'])     #1.2.3.54
 
 
 
-        # TODO: message derreur si requete non valide => lorsque la requête HTTP n'est pas GET, ou lorsque l'url ne contient pas de variable "dns".
+        # message derreur si requete non valide => lorsque la requête HTTP n'est pas GET, ou lorsque l'url ne contient pas de variable "dns".
         if (requestFromClient.command != "GET"):
             print 'ERROR: Method must be GET'
             exit(1)
 
-        #TODO: gere le cas de DNS ecrit en majuscule dans la requete
+        # gere le cas de DNS ecrit en majuscule dans la requete
         url = requestFromClient.path
         if "DNS".upper() not in url.upper():
             print 'ERROR: Must contains parm DNS'
@@ -250,38 +232,23 @@ if __name__ == "__main__":
         params = url.split('dns=')
         
         # change le codage pour revenir au codage binaire classique des requêtes DNS
-        request = convertEncoding(params[1])
-        #TODO: dnsaddr
-        dnsAddr = "1.2.3.4"
+        request = base64.b64decode(params[1])
+
+        # envoyer la requête DNS au résolveur (dont l'adresse se trouve dans le fichier "/etc/resolv.conf" de boxa).
+        dnsAddr,port=findaddrserver()
         dnsSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         bytes_send = dnsSocket.sendto(request,(dnsAddr, DEFAULT_DNS_PORT))
-
-        #TODO: gere le type de requete (mx,...)
-         # Receive message from server
           
-        # envoyer la requête DNS au résolveur (dont l'adresse se trouve dans le fichier "/etc/resolv.conf" de boxa).
-        #TODO: dnsAddr = getDNSaddr("/etc/resolv.conf") #TODO: verifier si .net manquant
-        #dnsAddr = "1.2.3.4"
-        #requestType = "MX"
-        # Create UDP socket #TODO: SOCK_DGRAM ou SOCK_STREAM
-        #sendDNSRequest(dnsAddr,domainName,requestType)
-
         # Ce résolveur s'occupera de faire la séquence de requêtes itératives permettant d'obtenir la réponse
 
         # Une fois la réponse DNS obtenue du résolveur, le message doit être transmis au client via une réponse HTTP.
         max_bytes = 4096
         #TODO: pas de reponse du dns
-        print "attente d'une reponse du serveur DNS"
+        print "attente d'une reponse du serveur DNS.."
         (raw_bytes2,src_addr) = dnsSocket.recvfrom(max_bytes)
-        print "from (dns addr):" 
-        print src_addr
-        print "data:"
-        print(raw_bytes2)
+        print "envoie d'une reponse au client.."
+        sendDoh(raw_bytes2,client)
 
-        server,port=findaddrserver()
-        #TODO base64.urlsafe_b64encode(raw_bytes2)
-        #encodedAnswer = base64.b64encode(raw_bytes2, '-_')
-        sendDoh(raw_bytes2,client,requestFromClient.headers['host'])
     print 'Fermeture de la connexion avec le client.'
     client.close()
     print 'Arret du serveur.'
