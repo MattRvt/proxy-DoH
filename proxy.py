@@ -36,6 +36,38 @@ class HTTPRequest(BaseHTTPRequestHandler):
         self.error_message = message
 
 ########## functions
+def bddGetAnswer(dommaineName,requestType):
+    """
+    consulte une base de données d'enregistrements DNS placée dans le fichier "boxa/etc/bind/db/static"
+    return un tablea de la forme tabl = ["cold.net","MX","5","smtp.cold.net"]
+    """
+
+    #TODO: change path
+    resolvconf = open("boxa/etc/bind/db.static", "r")
+    lines = resolvconf.readlines()
+    records = []
+    for line in lines:
+        record = line.split()
+        records.append(record)
+
+    #remove the record with mismatch domain name
+    records = filter(lambda record: record[0]==dommaineName, records)
+
+    #remove the record with mismatch type
+    records = filter(lambda record: record[2]==requestType, records)
+
+    #select the max priority for mx type
+    if (requestType.upper() == "MX"):
+        records = [max(records,key=lambda record: record[3])]
+
+    #si tout va bien, il ne rest qu'un seul resultat
+    if len(records)>1:
+        print "ERROR: plus d'un resultat trouvé."
+        print records
+    else:
+        return records[0]  
+
+
 def findaddrserver():
   """recupere l'adresse de couche transport du proxy DoH depuis le fichier /etc/resolv.conf"""
   resolvconf = open("/etc/resolv.conf", "r")
@@ -57,7 +89,6 @@ Content-Type: application/dns-message
 
 %s""" % (data)
     print 'sent HTTP request'
-    print mystring
     s.send(mystring)
 
 
@@ -84,82 +115,7 @@ def generateID():
     #TODO: generate a unique ID
     return 0xdb42
 
-def sendDNSRequest(dnsAddr,lookedForName,requestType):
-    """envoie une requete DNS"""
-    # TODO: La requête DNS envoyée au résolveur doit respecter le protocole DNS et contenir un champ ID différent pour chaque requête pour assurer la correspondance requête/réponse qui n'est pas donnée dans le protocole DNS classique en UDP.
-    
-
-    # construction du packet header + QNAME + QTYPE + QCLASS*
-    
-    #header
-    ID = generateID()
-    FLAGS = 0x0100
-
-    QDCOUNT = 0x0001 #One question follows
-    ANCOUNT = 0x0000 #No answers follow 
-    NSCOUNT = 0x0000 #No records follow
-    ARCOUNT = 0x0000 #No additional records follow
-
-
-
-    
-
-
-    IDOffset = 80
-    flagsOffset = IDOffset - 16
-    qdCountOffset = flagsOffset - 16
-    anCountOffset = qdCountOffset -16
-    nscountOffset = anCountOffset - 16
-    arCountOffset = nscountOffset - 16
-    header = (ID<<IDOffset) 
-    header = header | (FLAGS<<flagsOffset) 
-    header = header | (QDCOUNT<<qdCountOffset) 
-    header = header | (ANCOUNT<<anCountOffset) 
-    header = header | (NSCOUNT<<nscountOffset) 
-    header = header | (ARCOUNT<<arCountOffset)
-
-
-    #TODO: format data
-    lookedForName = lookedForName.split(".")
-    data = 0x0
-    totalLenght = 0
-    for part in lookedForName:
-        #convert to bin
-        binStr = [ord(c) for c in part]
-        charOffset = len(part)*8
-        binPart = 0
-        for char in binStr:
-            charOffset = charOffset - 8
-            binPart =  binPart | (char<<charOffset)
-        totalLenght = totalLenght + len(part)
-        binPart = binPart | (len(part)<<len(part)*8)
-        data = (data<<len(part)*8+4) | binPart
-    #totalLenght * 2 car chaque char est codé sur 2 oct + 2oct pour la longeur de chaque partie le tout fois 8 car 1 octet = 8 bit
-    dataSize = (totalLenght*2+len(lookedForName)*2)*8
-    binaryPacket = (header<<dataSize) | data
-
-    #TODO: A,MX,NS
-    QTYPE = 0x0001
-    #qclass
-    QCLASS = 0x0001
-    dataSize = 4*8
-    binaryPacket = (binaryPacket<<dataSize) | QTYPE
-    binaryPacket = (binaryPacket<<dataSize) | QCLASS
-
-
-    n = int(bin(binaryPacket)[2:], 2)
-    binaryPacket = binascii.unhexlify('%x' % n)
-     # Send request message to server
-    dnsSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    bytes_send = dnsSocket.sendto(binaryPacket,(dnsAddr, DEFAULT_DNS_PORT))
-
-    # Receive message from server
-    max_bytes = 4096
-    (raw_bytes2,src_addr) = dnsSocket.recvfrom(max_bytes)
-    print "from:" 
-    print src_addr
-    print "data:"
-    print(raw_bytes2)    
+  
     
 def bin(x):
     """
@@ -234,18 +190,27 @@ if __name__ == "__main__":
         # change le codage pour revenir au codage binaire classique des requêtes DNS
         request = base64.b64decode(params[1])
 
-        # envoyer la requête DNS au résolveur (dont l'adresse se trouve dans le fichier "/etc/resolv.conf" de boxa).
-        dnsAddr,port=findaddrserver()
-        dnsSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        bytes_send = dnsSocket.sendto(request,(dnsAddr, DEFAULT_DNS_PORT))
-          
-        # Ce résolveur s'occupera de faire la séquence de requêtes itératives permettant d'obtenir la réponse
+        #-Lorsqu'une requête DoH arrive et que la base de donnée contient la réponse, le proxy construit lui même la réponse et l'envoie au client. Sinon, le fonctionnement du proxy est inchangé.
+        print "recherche d'une reponse dans le cache.."
+        #TODO: changer path domaineAddr = bddGetAnswer(dommaineName)
+        domaineAddr = (1==2)
+        if (domaineAddr):
+            print "réponse trouvé en cache !"
+            rawBytesAnswer = dnsPacket(domaineAddr)
+        else:
+            print "Pas de réponse en cache, demande au DNS.."
+            # envoyer la requête DNS au résolveur (dont l'adresse se trouve dans le fichier "/etc/resolv.conf" de boxa).
+            dnsAddr,port=findaddrserver()
+            dnsSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            bytes_send = dnsSocket.sendto(request,(dnsAddr, DEFAULT_DNS_PORT))
 
-        # Une fois la réponse DNS obtenue du résolveur, le message doit être transmis au client via une réponse HTTP.
-        max_bytes = 4096
-        #TODO: pas de reponse du dns
-        print "attente d'une reponse du serveur DNS.."
-        (raw_bytes2,src_addr) = dnsSocket.recvfrom(max_bytes)
+            # Ce résolveur s'occupera de faire la séquence de requêtes itératives permettant d'obtenir la réponse
+
+            # Une fois la réponse DNS obtenue du résolveur, le message doit être transmis au client via une réponse HTTP.
+            max_bytes = 4096
+            #TODO: pas de reponse du dns
+            print "attente d'une reponse du serveur DNS.."
+            (raw_bytes2,src_addr) = dnsSocket.recvfrom(max_bytes)
         print "envoie d'une reponse au client.."
         sendDoh(raw_bytes2,client)
 

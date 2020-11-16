@@ -1,21 +1,52 @@
-     
+00 00 => id
+80 80 =>flags 
+        1 =>  it is a reponse
+        0000 => standard querry
+        0 => server is authority
+        0 => msg not truncated
+        1 => do querry recursively
+        1 => server can recursively querry
+        0 => reserved
+        00 => Not meaningful for query
+        0000 => reply code 
+00 01 => question
+00 00 => 0 answer
+00 01 => 1 resource recod (RR) follow
+00 00 => no additional RR follow
 
 
-            4          b            l           u           e        3        n           e           t
-expected:   0100 - 0110 0010 - 0110 1100 - 0111 0101 - 0110 0101 - 0011 - 0110 1110 - 0110 0101 - 0111 0100 64
-actual:     0100 - 0110 0010 - 0110 1100 - 0111 0101 - 0110 0101 - 0011 - 0110 1110 - 0110 0101 - 0111 0100
+04 => 4 char
+73 6d 74 70 => smtp
+04 => 4 char
+63 6f 6c 64 => cold
+03 => 3 char
+6e 65 74 => net
+00 => fin RR
+00 01 => type A
+00 01 => class in
+c => name si a pointer 
+0 0c pointer is the name at 12 octet du debut
+00 01 => type A
+00 01 => class IN
+00 00 ea 0b => ttl
+00 04 => addr is 4 bytes long
+d5 ba 21 05 => addr => 213.168.33.5
+c => pointer
+0 11 => 17 eme octet (cold.net)
+00 02 => type NS
+00 01 => class IN
+00 00 ea 0b => ttl
+00 0a => data leght = 10 bytes
+07 => 7 char
+64 6e 73 63 6f 6c 64 => dnscol
+c => pointer
+0 11 => 17 bytes => dns.cold
 
- 0011 - 0110 1110 - 0110 0101 - 0111 0100
- 0011 - 0110 1110 - 0110 0101 - 0111 0100
 
-38 char
-1101101101000010000000010000000000000000000000010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001000110001001101100011101010110010100110110111001100101011101000000000000000000000000000000000100000000000000000000000000000001
+pour la requete: smtp.cold.net	IN  A	213.186.33.5
+on veut:
 
-captured: db 42 01 00 00 01 00 00 00 00 00 00 data:  46 26 c7 56 53 6e 65 74 00 00 00 01 00 00 00 01 
-
-1101 1011 0100 0010 0000 0001 0000 0000 0000 0000 0000 0001 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0100 0110 0010 0110 1100 0111 0101 0110 0101 0011 0110 1110 0110 0101 0111 0100 0000 0000 0000 0000 0000 0000 0000 0001 0000 0000 0000 0000 0000 0000 0000 0001
-'\xdbB\x01\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00F&\xc7VSnet\x00\x00\x00\x01\x00\x00\x00\x01'
+expected header:  ID ID  8180 00 01 00 01 00 01 00 00
+actual:           0
 
 
-
-' '.join([a[i:i+4] for i in range(0, len(a), 4)])
