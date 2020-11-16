@@ -97,11 +97,7 @@ Content-Type: application/dns-message
 def waitForConnection(socket):
     """attend une connexion et return les donnes recu"""
     print "en attente d'une connexion.."
-    ADRESSE = ''
-    PORT = 80
-
     serveur = socket
-    serveur.bind((ADRESSE, PORT))
     serveur.listen(1)
 
     client, adresseClient = serveur.accept()
@@ -150,74 +146,77 @@ def askToCache():
 
 ########## main
 if __name__ == "__main__":
-    # réceptionner la requête transmise par le client
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    (donnees,client) = waitForConnection(server)
-    
-    #donnees = (
-    #    'GET /?dns=AAABAAABAAAAAAAABGJsdWUDbmV0AAAPAAE= HTTP/1.0\r\n'
-    #    'Host: 1.2.3.54\r\n'
-    #    'Accept: application/dns-message\r\n'
-    #)
-    
+    ADRESSE = ''
+    PORT = 80
+    server.bind((ADRESSE, PORT))
+    while 1:
+        # réceptionner la requête transmise par le client
+        (donnees,client) = waitForConnection(server)
 
-    if not donnees:
-        print 'Erreur de reception.'
-    else:
-        requestFromClient = HTTPRequest(donnees)
-
-        #print(requestFromClient.error_code)          #None
-        #print(requestFromClient.command)             #GET
-        #print(requestFromClient.path)                #/?dns=AAABAAABAAAAAAAABmRvbWFpbgRuYW1lAAAPAAE=
-        #print(requestFromClient.request_version)     #HTTP/1.0
-        #print(len(requestFromClient.headers))        #2
-        #print(requestFromClient.headers.keys())      #['host', 'accept']
-        #print(requestFromClient.headers['host'])     #1.2.3.54
+        #donnees = (
+        #    'GET /?dns=AAABAAABAAAAAAAABGJsdWUDbmV0AAAPAAE= HTTP/1.0\r\n'
+        #    'Host: 1.2.3.54\r\n'
+        #    'Accept: application/dns-message\r\n'
+        #)
 
 
-
-        # message derreur si requete non valide => lorsque la requête HTTP n'est pas GET, ou lorsque l'url ne contient pas de variable "dns".
-        if (requestFromClient.command != "GET"):
-            print 'ERROR: Method must be GET'
-            exit(1)
-
-        # gere le cas de DNS ecrit en majuscule dans la requete
-        url = requestFromClient.path
-        if "DNS".upper() not in url.upper():
-            print 'ERROR: Must contains parm DNS'
-            exit(1)
-
-        params = url.split('dns=')
-        
-        # change le codage pour revenir au codage binaire classique des requêtes DNS
-        request = base64.b64decode(params[1])
-
-        #-Lorsqu'une requête DoH arrive et que la base de donnée contient la réponse, le proxy construit lui même la réponse et l'envoie au client. Sinon, le fonctionnement du proxy est inchangé.
-        print "recherche d'une reponse dans le cache.."
-        #TODO: changer path domaineAddr = bddGetAnswer(dommaineName)
-        domaineAddr = (1==2)
-        if (domaineAddr):
-            print "réponse trouvé en cache !"
-            rawBytesAnswer = dnsPacket(domaineAddr)
+        if not donnees:
+            print 'Erreur de reception.'
         else:
-            print "Pas de réponse en cache, demande au DNS.."
-            # envoyer la requête DNS au résolveur (dont l'adresse se trouve dans le fichier "/etc/resolv.conf" de boxa).
-            dnsAddr,port=findaddrserver()
-            dnsSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            bytes_send = dnsSocket.sendto(request,(dnsAddr, DEFAULT_DNS_PORT))
+            requestFromClient = HTTPRequest(donnees)
 
-            # Ce résolveur s'occupera de faire la séquence de requêtes itératives permettant d'obtenir la réponse
+            #print(requestFromClient.error_code)          #None
+            #print(requestFromClient.command)             #GET
+            #print(requestFromClient.path)                #/?dns=AAABAAABAAAAAAAABmRvbWFpbgRuYW1lAAAPAAE=
+            #print(requestFromClient.request_version)     #HTTP/1.0
+            #print(len(requestFromClient.headers))        #2
+            #print(requestFromClient.headers.keys())      #['host', 'accept']
+            #print(requestFromClient.headers['host'])     #1.2.3.54
 
-            # Une fois la réponse DNS obtenue du résolveur, le message doit être transmis au client via une réponse HTTP.
-            max_bytes = 4096
-            #TODO: pas de reponse du dns
-            print "attente d'une reponse du serveur DNS.."
-            (raw_bytes2,src_addr) = dnsSocket.recvfrom(max_bytes)
-        print "envoie d'une reponse au client.."
-        sendDoh(raw_bytes2,client)
 
-    print 'Fermeture de la connexion avec le client.'
-    client.close()
-    print 'Arret du serveur.'
-    server.close()
-    dnsSocket.close()
+
+            # message derreur si requete non valide => lorsque la requête HTTP n'est pas GET, ou lorsque l'url ne contient pas de variable "dns".
+            if (requestFromClient.command != "GET"):
+                print 'ERROR: Method must be GET'
+                exit(1)
+
+            # gere le cas de DNS ecrit en majuscule dans la requete
+            url = requestFromClient.path
+            if "DNS".upper() not in url.upper():
+                print 'ERROR: Must contains parm DNS'
+                exit(1)
+
+            params = url.split('dns=')
+
+            # change le codage pour revenir au codage binaire classique des requêtes DNS
+            request = base64.b64decode(params[1])
+
+            #-Lorsqu'une requête DoH arrive et que la base de donnée contient la réponse, le proxy construit lui même la réponse et l'envoie au client. Sinon, le fonctionnement du proxy est inchangé.
+            print "recherche d'une reponse dans le cache.."
+            #TODO: changer path domaineAddr = bddGetAnswer(dommaineName)
+            domaineAddr = (1==2)
+            if (domaineAddr):
+                print "réponse trouvé en cache !"
+                rawBytesAnswer = dnsPacket(domaineAddr)
+            else:
+                print "Pas de réponse en cache, demande au DNS.."
+                # envoyer la requête DNS au résolveur (dont l'adresse se trouve dans le fichier "/etc/resolv.conf" de boxa).
+                dnsAddr,port=findaddrserver()
+                dnsSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                bytes_send = dnsSocket.sendto(request,(dnsAddr, DEFAULT_DNS_PORT))
+
+                # Ce résolveur s'occupera de faire la séquence de requêtes itératives permettant d'obtenir la réponse
+
+                # Une fois la réponse DNS obtenue du résolveur, le message doit être transmis au client via une réponse HTTP.
+                max_bytes = 4096
+                #TODO: pas de reponse du dns
+                print "attente d'une reponse du serveur DNS.."
+                (raw_bytes2,src_addr) = dnsSocket.recvfrom(max_bytes)
+            print "envoie d'une reponse au client.."
+            sendDoh(raw_bytes2,client)
+            print 'Fermeture de la connexion avec le client.'
+            client.close()
+print 'Arret du serveur.'
+server.close()
+dnsSocket.close()
