@@ -10,6 +10,8 @@ vdump "lana" | wireshark -i - -k &
 
 
 ./senddns.py -t NS blue.net
+
+https://www2.cs.duke.edu/courses/fall16/compsci356/DNS/DNS-primer.pdf
 """
 
 
