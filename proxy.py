@@ -70,6 +70,8 @@ def bddGetAnswer(dommaineName,requestType,pathToBDD):
     if len(records)>1:
         print "ERROR: plus d'un resultat trouvé."
         print records
+    elif len(records)==0:
+        return 
     else:
         return records[0]  
 
@@ -338,6 +340,7 @@ if __name__ == "__main__":
                 # Une fois la réponse DNS obtenue du résolveur, le message doit être transmis au client via une réponse HTTP.
                 max_bytes = 4096
                 #TODO: pas de reponse du dns
+                #TODO: le DNS ne trouve pas la rep a la querry
                 print "attente d'une reponse du serveur DNS.."
                 (rawBytesAnswer,src_addr) = dnsSocket.recvfrom(max_bytes)
             print "envoie d'une reponse au client.."
