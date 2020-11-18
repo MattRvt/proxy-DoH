@@ -1,81 +1,78 @@
 #!/usr/bin/python
 # -*-coding:Latin-1 -*
-import binascii
 
-def dnsPacketAnswer(requestID,answer):
-    """construit une reponse DNS"""
-    # TODO: La requête DNS envoyée au résolveur doit respecter le protocole DNS et contenir un champ ID différent pour chaque requête pour assurer la correspondance requête/réponse qui n'est pas donnée dans le protocole DNS classique en UDP.
-    
+import struct
+import proxy
+import senddns_cpy
+import base64
 
-    # construction du packet header + QNAME + QTYPE + QCLASS*
-    
-    #header
-    ID = requestID
-    #TODO: recursif ?
-    FLAGS = 0x8180
-    QDCOUNT = 0x0001 #One question follows
-    ANCOUNT = 0x0001 #No answers follow 
-    NSCOUNT = 0x0001 #1 records follow
-    ARCOUNT = 0x0000 #No additional records follow
+def sendDoh(data,s):
+    """
+    envoie les donnes data sur la socket s
+    """
+    path="?dns="+data
+    mystring = """:status= 200
+Content-Type: application/dns-message
 
-
-    
-
-
-    IDOffset = 80
-    flagsOffset = IDOffset - 16
-    qdCountOffset = flagsOffset - 16
-    anCountOffset = qdCountOffset -16
-    nscountOffset = anCountOffset - 16
-    arCountOffset = nscountOffset - 16
-    header = 0x0
-    header = header | (ID<<IDOffset) 
-    header = header | (FLAGS<<flagsOffset) 
-    header = header | (QDCOUNT<<qdCountOffset) 
-    header = header | (ANCOUNT<<anCountOffset) 
-    header = header | (NSCOUNT<<nscountOffset) 
-    header = header | (ARCOUNT<<arCountOffset)
-
-
-    name = answer[0].split(".")
-    data = 0x0
-    totalLenght = 0
-    for part in name:
-        #convert to bin
-        binStr = [ord(c) for c in part]
-        charOffset = len(part)*8
-        binPart = 0
-        for char in binStr:
-            charOffset = charOffset - 8
-            binPart =  binPart | (char<<charOffset)
-        totalLenght = totalLenght + len(part)
-        #add the lenght of the part
-        binPart = binPart | (len(part)<<len(part)*8)
-        #add the part to the data
-        data = (data<<((len(part))*8+8)) | binPart
-    #totalLenght * 2 car chaque char est codé sur 2 oct + 2oct pour la longeur de chaque partie le tout fois 8 car 1 octet = 8 bit
-    dataSize = (totalLenght*2+len(name)*2)*8
-    binaryPacket = (header<<dataSize) | data
-    
-    if (answer[2] == "A"):
-        RRTYPE = 0x0001
-    elif (answer[2] == "MX"):
-        #TODO
-        RRTYPE = 0x0001
-    elif (answer[2] == "NS"):
-        #TODO
-        RRTYPE = 0x0001
-    RRCLASS = 0x0001
-    dataSize = 4*8
-    binaryPacket = (binaryPacket<<dataSize) | RRTYPE
-    binaryPacket = (binaryPacket<<dataSize) | RRCLASS
-
-
-    n = int(bin(binaryPacket)[2:], 2)
-    binaryPacket = binascii.unhexlify('%x' % n)
-    #TODO: if ID start with 0, nothing is sent
-    print binaryPacket
+%s""" % (data)
+    print 'sent HTTP request'
+    #s.send(mystring)
+    return mystring
 
 if __name__ == "__main__":
-    #smtp.cold.net	IN  A	213.186.33.5
-    dnsPacketAnswer(0x1000,['dnscold.cold.net', 'IN', 'A', '213.186.33.5'])
+    request = "AAABAAABAAAAAAAABHNtdHAEY29sZANuZXQAAAEAAQ=="
+    request = base64.b64decode(request)
+    (p,dommaineName,requestType,requestClass) = proxy.parseRequest(request,12)
+
+    pathToBDD = 'boxa/etc/bind/db.static'
+    domaineRecord = proxy.bddGetAnswer(dommaineName,proxy.numbertotype(requestType),pathToBDD)
+    rawBytesAnswer = proxy.dnsPacketAnswer([p,dommaineName,requestType,requestClass],domaineRecord)
+
+    ################################ client side
+
+    data=rawBytesAnswer
+
+    print "\n"
+    header=struct.unpack(">HBBHHHH",data[:12])
+    qdcount=header[3]
+    ancount=header[4]
+    nscount=header[5]
+    arcount=header[6]
+
+    i=12
+
+    print "QUERY: "+str(qdcount)+", ANSWER: "+str(ancount)+", AUTHORITY: "+str(nscount)+", ADDITIONAL: "+str(arcount)+'\n'
+    if qdcount:
+      print "QUERY SECTION :\n"
+      for j in range(qdcount):
+        pos,name,typ,clas=senddns_cpy.retrquest(data,i)
+        i=pos
+        print name+"   "+senddns_cpy.numbertotype(typ)+"   "+str(clas)
+      print "\n"
+
+    if ancount:
+      print "ANSWER SECTION :\n"
+      for j in range(ancount):
+        pos,name,typ,clas,ttl,datalen,dat=senddns_cpy.retrrr(data,i)
+        i=pos
+        if typ == 15:
+          print name+"   "+senddns_cpy.numbertotype(typ)+"   "+str(clas)+"   "+str(ttl)+"   "+str(dat[0])+"   "+dat[1]
+        else:
+          print name+"   "+senddns_cpy.numbertotype(typ)+"   "+str(clas)+"   "+str(ttl)+"   "+str(dat)
+      print "\n"
+
+    if nscount:
+      print "AUTHORITY SECTION :\n"
+      for j in range(nscount):
+        pos,name,typ,clas,ttl,datalen,dat=senddns_cpy.retrrr(data,i)
+        i=pos
+        print name+"   "+senddns_cpy.numbertotype(typ)+"   "+str(clas)+"   "+str(ttl)+"   "+str(dat)
+      print "\n"
+
+    if arcount:
+      print "ADDITIONAL SECTION :\n"
+      for j in range(arcount):
+        pos,name,typ,clas,ttl,datalen,dat=senddns_cpy.retrrr(data,i)
+        i=pos
+        print name+"   "+senddns_cpy.numbertotype(typ)+"   "+str(clas)+"   "+str(ttl)+"   "+str(dat)
+      print "\n"

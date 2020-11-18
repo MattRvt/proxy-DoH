@@ -11,6 +11,10 @@ vdump "lana" | wireshark -i - -k &
 
 ./senddns.py -t NS blue.net
 
+
+to test with cache non recursif
+./senddns.py -t A smtp.cold.net
+
 https://www2.cs.duke.edu/courses/fall16/compsci356/DNS/DNS-primer.pdf
 """
 
@@ -21,6 +25,7 @@ from BaseHTTPServer import BaseHTTPRequestHandler
 from StringIO import StringIO
 import base64
 import binascii
+import struct
 
 ########## constant
 DEFAULT_DNS_PORT = 53
@@ -38,14 +43,13 @@ class HTTPRequest(BaseHTTPRequestHandler):
         self.error_message = message
 
 ########## functions
-def bddGetAnswer(dommaineName,requestType):
+def bddGetAnswer(dommaineName,requestType,pathToBDD):
     """
     consulte une base de données d'enregistrements DNS placée dans le fichier "boxa/etc/bind/db/static"
     return un tablea de la forme tabl = ["cold.net","MX","5","smtp.cold.net"]
     """
 
-    #TODO: change path
-    resolvconf = open("boxa/etc/bind/db.static", "r")
+    resolvconf = open(pathToBDD, "r")
     lines = resolvconf.readlines()
     records = []
     for line in lines:
@@ -59,7 +63,7 @@ def bddGetAnswer(dommaineName,requestType):
     records = filter(lambda record: record[2]==requestType, records)
 
     #select the max priority for mx type
-    if (requestType.upper() == "MX"):
+    if (requestType.upper() == "MX") and (len(records)>1):
         records = [max(records,key=lambda record: record[3])]
 
     #si tout va bien, il ne rest qu'un seul resultat
@@ -113,7 +117,62 @@ def generateID():
     #TODO: generate a unique ID
     return 0xdb42
 
-  
+def requestDecode(request):
+    print request
+
+def dnsPacketAnswer(request,answer):
+    """construction de la requete demandant les enregistrements de type typ pour le nom de domaine name"""
+    data=""
+    #id sur 2 octets
+    #TODO: retrive ID
+    data=data+struct.pack(">H",0)
+    # octet suivant : flag
+    data=data+struct.pack(">H",0x8180)
+    #QDCOUNT sur 2 octets
+    data=data+struct.pack(">H",1)
+    data=data+struct.pack(">H",0)
+    data=data+struct.pack(">H",0)
+    data=data+struct.pack(">H",0)
+    splitname=request[1].split('.')
+    for c in splitname:
+      data=data+struct.pack("B",len(c))
+      for l in c:
+        data=data+struct.pack("c",l)
+    data=data+struct.pack("B",0)
+    #TYPE
+    data=data+struct.pack(">H",request[2])
+    #CLASS 1 (IN) par defaut
+    data=data+struct.pack(">H",1)
+
+    ######## #TODO:ANSWER
+
+    #name is pointer 
+    data=data+struct.pack(">H",0xc)
+    #pointer is to the name of offset
+    data=data+struct.pack(">H",0x00c)
+
+    #answer type
+    data=data+struct.pack(">H",typenumber(answer[2]))
+
+    #answer class
+    #CLASS 1 (IN) par defaut
+    data=data+struct.pack(">H",1)
+
+    #reponse validity 
+    data=data+struct.pack(">H",0x00000258)
+
+    #addr length
+    data=data+struct.pack(">H",0x0004)
+
+    #addresse
+    addr = answer[3].split('.')
+    data=data+struct.pack("B",int(addr[0]))
+    data=data+struct.pack("B",int(addr[1]))
+    data=data+struct.pack("B",int(addr[2]))
+    data=data+struct.pack("B",int(addr[3]))
+
+    return data
+
     
 def bin(x):
     """
@@ -136,7 +195,72 @@ def bin(x):
         out.reverse()
     return '0b' + ''.join(out)
 
+def typenumber(typ):
+  """associe un entier a un nom de type"""
+  if typ=='A':
+    return 1
+  if typ=='MX':
+    return 15
+  if typ=='NS':
+    return 2
 
+def numbertotype(typ):
+  """associe son type a un entier"""
+  if typ==1:
+    return 'A'
+  if typ==15:
+    return 'MX'
+  if typ==2:
+    return 'NS'
+
+def tupletostring(t):
+  """concatene un tuple de chaines de caracteres en une seule chaine"""
+  s=""
+  for c in t:
+    s=s+c
+  return s
+
+def listtostring(l):
+  """concatene une liste de chaines de caracteres en une seule chaine"""
+  s=""
+  for c in l:
+    s=s+c
+  return s
+
+def getname(string,pos):
+  """recupere le nom de domaine encode dans une reponse DNS a la position p, en lecture directe ou en compression"""
+  p=pos
+  save=0
+  name=""
+  l=1
+  if l==0:
+    return p+1,""
+  while l:
+    l=struct.unpack("B",string[p])[0]
+    if l>=192:
+      #compression du message : les 2 premiers octets sont les 2 bits 11 puis le decalage depuis le debut de l'ID sur 14 bits
+      if save == 0:
+        save=p
+      p=(l-192)*256+(struct.unpack("B",string[p+1])[0])
+      l=struct.unpack("B",string[p])[0]
+    if len(name) and l:
+      name=name+'.'
+    p=p+1
+    name=name+tupletostring(struct.unpack("c"*l,string[p:(p+l)]))
+    p=p+l
+  if save > 0:
+    p=save+2
+  return p,name
+
+def parseRequest(string,pos):
+  """decrit une section question presente dans la reponse DNS string a la position pos"""
+  p=pos
+  p,name=getname(string,p)
+  typ = struct.unpack(">H",string[p:p+2])[0]
+  p=p+2
+  clas = struct.unpack(">H",string[p:p+2])[0]
+  p=p+2
+  return p,name,typ,clas
 
 def askToCache():
     """part3: si le nom est present dans le cache, renvoie l'ip associé si non renvoi 0"""
@@ -168,7 +292,7 @@ if __name__ == "__main__":
 
             #print(requestFromClient.error_code)          #None
             #print(requestFromClient.command)             #GET
-            #print(requestFromClient.path)                #/?dns=AAABAAABAAAAAAAABmRvbWFpbgRuYW1lAAAPAAE=
+            #print(requestFromClient.path)                 #/?dns=AAABAAABAAAAAAAABmRvbWFpbgRuYW1lAAAPAAE=
             #print(requestFromClient.request_version)     #HTTP/1.0
             #print(len(requestFromClient.headers))        #2
             #print(requestFromClient.headers.keys())      #['host', 'accept']
@@ -194,11 +318,15 @@ if __name__ == "__main__":
 
             #-Lorsqu'une requête DoH arrive et que la base de donnée contient la réponse, le proxy construit lui même la réponse et l'envoie au client. Sinon, le fonctionnement du proxy est inchangé.
             print "recherche d'une reponse dans le cache.."
-            #TODO: changer path domaineAddr = bddGetAnswer(dommaineName)
-            domaineAddr = (1==2)
-            if (domaineAddr):
+
+            (p,dommaineName,requestType,requestClass) = parseRequest(request,12)
+            requestType = numbertotype(requestType) 
+            pathToBDD = '../etc/bind/db.static'
+            domaineRecord = bddGetAnswer(dommaineName,requestType,pathToBDD)
+            if (domaineRecord):
                 print "réponse trouvé en cache !"
-                rawBytesAnswer = dnsPacket(domaineAddr)
+                answer = domaineRecord
+                rawBytesAnswer = dnsPacketAnswer([p,dommaineName,requestType,requestClass],answer)
             else:
                 print "Pas de réponse en cache, demande au DNS.."
                 # envoyer la requête DNS au résolveur (dont l'adresse se trouve dans le fichier "/etc/resolv.conf" de boxa).
@@ -212,11 +340,11 @@ if __name__ == "__main__":
                 max_bytes = 4096
                 #TODO: pas de reponse du dns
                 print "attente d'une reponse du serveur DNS.."
-                (raw_bytes2,src_addr) = dnsSocket.recvfrom(max_bytes)
+                (rawBytesAnswer,src_addr) = dnsSocket.recvfrom(max_bytes)
             print "envoie d'une reponse au client.."
-            sendDoh(raw_bytes2,client)
+            sendDoh(rawBytesAnswer,client)
             print 'Fermeture de la connexion avec le client.'
             client.close()
-print 'Arret du serveur.'
-server.close()
-dnsSocket.close()
+    print 'Arret du serveur.'
+    server.close()
+    dnsSocket.close()
