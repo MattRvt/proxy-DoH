@@ -292,7 +292,7 @@ if __name__ == "__main__":
 
             #print(requestFromClient.error_code)          #None
             #print(requestFromClient.command)             #GET
-            #print(requestFromClient.path)                 #/?dns=AAABAAABAAAAAAAABmRvbWFpbgRuYW1lAAAPAAE=
+            print(requestFromClient.path)                 #/?dns=AAABAAABAAAAAAAABmRvbWFpbgRuYW1lAAAPAAE=
             #print(requestFromClient.request_version)     #HTTP/1.0
             #print(len(requestFromClient.headers))        #2
             #print(requestFromClient.headers.keys())      #['host', 'accept']
@@ -320,9 +320,8 @@ if __name__ == "__main__":
             print "recherche d'une reponse dans le cache.."
 
             (p,dommaineName,requestType,requestClass) = parseRequest(request,12)
-            requestType = numbertotype(requestType) 
             pathToBDD = '../etc/bind/db.static'
-            domaineRecord = bddGetAnswer(dommaineName,requestType,pathToBDD)
+            domaineRecord = bddGetAnswer(dommaineName,numbertotype(requestType),pathToBDD)
             if (domaineRecord):
                 print "réponse trouvé en cache !"
                 answer = domaineRecord
