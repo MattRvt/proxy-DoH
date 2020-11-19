@@ -23,10 +23,14 @@ def test(request):
     request = base64.b64decode(request)
     (p,dommaineName,requestType,requestClass) = proxy.parseRequest(request,12)
 
+    currentRequestID = proxy.generateID()
+    request = struct.pack(">H",currentRequestID)+request[2:]
+
     pathToBDD = 'boxa/etc/bind/db.static'
     domaineRecord = proxy.bddGetAnswer(dommaineName,proxy.numbertotype(requestType),pathToBDD)
     rawBytesAnswer = proxy.dnsPacketAnswer([p,dommaineName,requestType,requestClass],domaineRecord)
 
+    idMatch = (currentRequestID == struct.unpack(">H",request[:2])[0])
     ################################ client side
 
     data=rawBytesAnswer
@@ -80,9 +84,11 @@ def test(request):
 if __name__ == "__main__":
   print "\r"
 
-  print "smpt.cold.net A 1 utilise le cache sans champ additionnel"
+  print "./senddns.py -t A smtp.cold.net \t utilise le cache sans champ additionnel"
   test("AAABAAABAAAAAAAABHNtdHAEY29sZANuZXQAAAEAAQ==")
 
-  print "utilise cache avec champ additionel"
-  print "n'utilise pas le cache"
-    
+  #TODO: print "./senddns.py -t MX cold.net \t utilise cache avec champ additionel"
+  #TODO: test("AAABAAABAAAAAAAABGNvbGQDbmV0AAAPAAE=")
+
+  #TODO: print "./senddns.py -t NS blue.net \t n'utilise pas le cache et champ additionnel "
+  #TODO: test("AAABAAABAAAAAAAABGJsdWUDbmV0AAACAAE=")

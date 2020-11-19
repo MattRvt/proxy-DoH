@@ -26,6 +26,7 @@ from StringIO import StringIO
 import base64
 import binascii
 import struct
+import random
 
 ########## constant
 DEFAULT_DNS_PORT = 53
@@ -112,17 +113,16 @@ def waitForConnection(socket):
     return donnees,client
 
 def generateID():
-    #TODO: generate a unique ID
-    return 0xdb42
+    #le module secrets serait preferable mais il n'est pas disponible pour python 2.5
+    generatedId = random.randint(1,65535)
+    return generatedId
 
-def requestDecode(request):
-    print request
 
 def dnsPacketAnswer(request,answer):
     """construction de la requete demandant les enregistrements de type typ pour le nom de domaine name"""
     data=""
     #id sur 2 octet
-    data=data+struct.pack(">H",generateID())
+    data=data+struct.pack(">H",0x0000)
     # octet suivant : flag
     data=data+struct.pack(">H",0x8180)
     #QDCOUNT sur 2 octets
@@ -323,12 +323,20 @@ if __name__ == "__main__":
                 print "réponse trouvé en cache !"
                 answer = domaineRecord
                 rawBytesAnswer = dnsPacketAnswer([p,dommaineName,requestType,requestClass],answer)
+                
+                #la requete est traiter en internet, la reponse correspond forcement
+                idMatch = 1
             else:
                 print "Pas de réponse en cache, demande au DNS.."
                 # envoyer la requête DNS au résolveur (dont l'adresse se trouve dans le fichier "/etc/resolv.conf" de boxa).
                 dnsAddr,port=findaddrserver()
                 dnsSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                #TODO: assurer la correspondence a l'aide des ID
+
+                #change l'ID de la requete
+                currentRequestID = generateID()
+                request = struct.pack(">H",currentRequestID)+request[2:]
+
+                #envoie de la requete
                 bytes_send = dnsSocket.sendto(request,(dnsAddr, DEFAULT_DNS_PORT))
 
                 # Ce résolveur s'occupera de faire la séquence de requêtes itératives permettant d'obtenir la réponse
@@ -338,11 +346,20 @@ if __name__ == "__main__":
                 #TODO: pas de reponse du dns
                 #TODO: le DNS ne trouve pas la rep a la querry
                 print "attente d'une reponse du serveur DNS.."
+                
                 (rawBytesAnswer,src_addr) = dnsSocket.recvfrom(max_bytes)
-            print "envoie d'une reponse au client.."
-            sendDoh(rawBytesAnswer,client)
-            print 'Fermeture de la connexion avec le client.'
-            client.close()
+                
+                #test si l'id correspond
+                idMatch = (currentRequestID == struct.unpack(">H",request[:2])[0])
+            
+            if idMatch:
+              print "envoie d'une reponse au client.."
+              sendDoh(rawBytesAnswer,client)
+              print 'Fermeture de la connexion avec le client.'
+              client.close()
+            else:
+              print "ERROR: le serveur DNS n'a pas répondu avec le bon ID."
+              client.close()
     print 'Arret du serveur.'
     server.close()
     dnsSocket.close()
