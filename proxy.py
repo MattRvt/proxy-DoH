@@ -111,10 +111,6 @@ def waitForConnection(socket):
     donnees = client.recv(1024)
     return donnees,client
 
-def stringToHex(string):
-    #TODO: convert string to it's hexa notation
-    return hex(string)
-
 def generateID():
     #TODO: generate a unique ID
     return 0xdb42
@@ -125,9 +121,8 @@ def requestDecode(request):
 def dnsPacketAnswer(request,answer):
     """construction de la requete demandant les enregistrements de type typ pour le nom de domaine name"""
     data=""
-    #id sur 2 octets
-    #TODO: retrive ID
-    data=data+struct.pack(">H",0)
+    #id sur 2 octet
+    data=data+struct.pack(">H",generateID())
     # octet suivant : flag
     data=data+struct.pack(">H",0x8180)
     #QDCOUNT sur 2 octets
@@ -146,7 +141,7 @@ def dnsPacketAnswer(request,answer):
     #CLASS 1 (IN) par defaut
     data=data+struct.pack(">H",1)
 
-    ######## #TODO:ANSWER
+    ######## ANSWER
 
     #name is pointer 
     data=data+struct.pack(">H",0xc)
@@ -173,6 +168,9 @@ def dnsPacketAnswer(request,answer):
     data=data+struct.pack("B",int(addr[2]))
     data=data+struct.pack("B",int(addr[3]))
 
+    #TODO: -Le champ additionnel est bien sûr requis lorsque la requête est de type MX ou NS.
+
+    #TODO: peux prioritaire, compression nom de domaine, relir sujet
     return data
 
     
@@ -264,9 +262,6 @@ def parseRequest(string,pos):
   p=p+2
   return p,name,typ,clas
 
-def askToCache():
-    """part3: si le nom est present dans le cache, renvoie l'ip associé si non renvoi 0"""
-    # TODO: relir sujet avant de faire
 
 
 
@@ -333,6 +328,7 @@ if __name__ == "__main__":
                 # envoyer la requête DNS au résolveur (dont l'adresse se trouve dans le fichier "/etc/resolv.conf" de boxa).
                 dnsAddr,port=findaddrserver()
                 dnsSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                #TODO: assurer la correspondence a l'aide des ID
                 bytes_send = dnsSocket.sendto(request,(dnsAddr, DEFAULT_DNS_PORT))
 
                 # Ce résolveur s'occupera de faire la séquence de requêtes itératives permettant d'obtenir la réponse

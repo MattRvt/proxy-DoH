@@ -19,8 +19,7 @@ Content-Type: application/dns-message
     #s.send(mystring)
     return mystring
 
-if __name__ == "__main__":
-    request = "AAABAAABAAAAAAAABHNtdHAEY29sZANuZXQAAAEAAQ=="
+def test(request):
     request = base64.b64decode(request)
     (p,dommaineName,requestType,requestClass) = proxy.parseRequest(request,12)
 
@@ -76,3 +75,14 @@ if __name__ == "__main__":
         i=pos
         print name+"   "+senddns_cpy.numbertotype(typ)+"   "+str(clas)+"   "+str(ttl)+"   "+str(dat)
       print "\n"
+
+
+if __name__ == "__main__":
+  print "\r"
+
+  print "smpt.cold.net A 1 utilise le cache sans champ additionnel"
+  test("AAABAAABAAAAAAAABHNtdHAEY29sZANuZXQAAAEAAQ==")
+
+  print "utilise cache avec champ additionel"
+  print "n'utilise pas le cache"
+    
