@@ -26,8 +26,12 @@ def test(request):
     currentRequestID = proxy.generateID()
     request = struct.pack(">H",currentRequestID)+request[2:]
 
+
+    #get list of answer to return to client
     pathToBDD = 'boxa/etc/bind/db.static'
-    domaineRecord = proxy.bddGetAnswer(dommaineName,proxy.numbertotype(requestType),pathToBDD)
+    records = []
+    domaineRecord = proxy.bddGetAnswer(dommaineName,proxy.numbertotype(requestType),pathToBDD,records)
+
     rawBytesAnswer = proxy.dnsPacketAnswer([p,dommaineName,requestType,requestClass],domaineRecord)
 
     idMatch = (currentRequestID == struct.unpack(">H",request[:2])[0])
@@ -84,11 +88,11 @@ def test(request):
 if __name__ == "__main__":
   print "\r"
 
-  print "./senddns.py -t A smtp.cold.net \t utilise le cache sans champ additionnel"
-  test("AAABAAABAAAAAAAABHNtdHAEY29sZANuZXQAAAEAAQ==")
+  #print "./senddns.py -t A smtp.cold.net \t utilise le cache sans champ additionnel"
+  #test("AAABAAABAAAAAAAABHNtdHAEY29sZANuZXQAAAEAAQ==")
 
-  #TODO: print "./senddns.py -t MX cold.net \t utilise cache avec champ additionel"
-  #TODO: test("AAABAAABAAAAAAAABGNvbGQDbmV0AAAPAAE=")
+  print "./senddns.py -t MX cold.net \t utilise cache avec champ additionel"
+  test("AAABAAABAAAAAAAABGNvbGQDbmV0AAAPAAE=")
 
   #TODO: print "./senddns.py -t NS blue.net \t n'utilise pas le cache et champ additionnel "
   #TODO: test("AAABAAABAAAAAAAABGJsdWUDbmV0AAACAAE=")

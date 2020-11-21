@@ -44,7 +44,7 @@ class HTTPRequest(BaseHTTPRequestHandler):
         self.error_message = message
 
 ########## functions
-def bddGetAnswer(dommaineName,requestType,pathToBDD):
+def bddGetAnswer(dommaineName,requestType,pathToBDD,recordsAnswer):
     """
     consulte une base de données d'enregistrements DNS placée dans le fichier "boxa/etc/bind/db/static"
     return un tablea de la forme tabl = ["cold.net","MX","5","smtp.cold.net"]
@@ -74,7 +74,13 @@ def bddGetAnswer(dommaineName,requestType,pathToBDD):
     elif len(records)==0:
         return 
     else:
-        return records[0]  
+      if recordIsFinal(records):
+        recordsAnswer.append(records[0])
+        return recordsAnswer
+      else:
+        recordsAnswer.append(records[0])
+        #TODO: champs additionnel type A ?
+        return bddGetAnswer(records[0][-1],"A",pathToBDD,recordsAnswer)
 
 
 def findaddrserver():
@@ -117,19 +123,24 @@ def generateID():
     generatedId = random.randint(1,65535)
     return generatedId
 
+def recordIsFinal(record):
+  return (len(record[0][-1].split('.'))==4 and int(record[0][-1].split('.')[0]))
 
-def dnsPacketAnswer(request,answer):
+def dnsPacketAnswer(request,records):
     """construction de la requete demandant les enregistrements de type typ pour le nom de domaine name"""
     data=""
     #id sur 2 octet
     data=data+struct.pack(">H",0x0000)
     # octet suivant : flag
-    data=data+struct.pack(">H",0x8180)
+    data=data+struct.pack(">H",0x8580)
     #QDCOUNT sur 2 octets
-    data=data+struct.pack(">H",1)
-    data=data+struct.pack(">H",0)
-    data=data+struct.pack(">H",0)
-    data=data+struct.pack(">H",0)
+    data=data+struct.pack(">H",1) #One question follows
+    data=data+struct.pack(">H",len(records)) #TODO: 0 answer follows
+    data=data+struct.pack(">H",0) #Autority RRs
+    data=data+struct.pack(">H",0) #Additional RRs
+
+    ############# Queries
+
     splitname=request[1].split('.')
     for c in splitname:
       data=data+struct.pack("B",len(c))
@@ -144,31 +155,48 @@ def dnsPacketAnswer(request,answer):
     ######## ANSWER
 
     #name is pointer 
-    data=data+struct.pack(">H",0xc)
-    #pointer is to the name of offset
-    data=data+struct.pack(">H",0x00c)
+    #data=data+struct.pack(">H",0xc)
+    #pointer is to the name of offset 12
+    #data=data+struct.pack(">H",0x00c)
 
-    #answer type
-    data=data+struct.pack(">H",typenumber(answer[2]))
 
-    #answer class
-    #CLASS 1 (IN) par defaut
-    data=data+struct.pack(">H",1)
+    for answer in records:
+      splitname=request[1].split('.')
+      for c in splitname:
+        data=data+struct.pack("B",len(c))
+        for l in c:
+          data=data+struct.pack("c",l)
+      data=data+struct.pack("B",0)
 
-    #reponse validity 
-    data=data+struct.pack(">H",0x00000258)
 
-    #addr length
-    data=data+struct.pack(">H",0x0004)
+      #answer type
+      data=data+struct.pack(">H",typenumber(answer[2]))
 
-    #addresse
-    addr = answer[3].split('.')
-    data=data+struct.pack("B",int(addr[0]))
-    data=data+struct.pack("B",int(addr[1]))
-    data=data+struct.pack("B",int(addr[2]))
-    data=data+struct.pack("B",int(addr[3]))
+      #answer class
+      #CLASS 1 (IN) par defaut
+      data=data+struct.pack(">H",1)
 
-    #TODO: -Le champ additionnel est bien sûr requis lorsque la requête est de type MX ou NS.
+      #reponse validity 
+      data=data+struct.pack(">H",0x00000258)
+
+      if (recordIsFinal([answer])):
+
+        #addr length
+        data=data+struct.pack(">H",0x0004)
+
+        #addresse
+        addr = answer[-1].split('.')
+        data=data+struct.pack("B",int(addr[0]))
+        data=data+struct.pack("B",int(addr[1]))
+        data=data+struct.pack("B",int(addr[2]))
+        data=data+struct.pack("B",int(addr[3]))
+      else:
+        splitname=request[1].split('.')
+        for c in splitname:
+          data=data+struct.pack("B",len(c))
+          for l in c:
+            data=data+struct.pack("c",l)
+        data=data+struct.pack("B",0)
 
     #TODO: peux prioritaire, compression nom de domaine, relir sujet
     return data
@@ -318,12 +346,14 @@ if __name__ == "__main__":
 
             (p,dommaineName,requestType,requestClass) = parseRequest(request,12)
             pathToBDD = '../etc/bind/db.static'
-            domaineRecord = bddGetAnswer(dommaineName,numbertotype(requestType),pathToBDD)
-            if (domaineRecord):
+            records = []
+            domaineRecord = proxy.bddGetAnswer(dommaineName,proxy.numbertotype(requestType),pathToBDD,records)
+
+            if (len(domaineRecord) > 0):
                 print "réponse trouvé en cache !"
                 answer = domaineRecord
-                rawBytesAnswer = dnsPacketAnswer([p,dommaineName,requestType,requestClass],answer)
-                
+                rawBytesAnswer = proxy.dnsPacketAnswer([p,dommaineName,requestType,requestClass],domaineRecord)
+
                 #la requete est traiter en internet, la reponse correspond forcement
                 idMatch = 1
             else:
