@@ -174,7 +174,16 @@ def retrrr(string,pos):
     pref = struct.unpack(">H",string[p:p+2])[0]
     x,mailname = getname(string,p+2)
     dat = (pref,mailname)
-  if typ not in [1,2,15]:
+  if typ == 6:
+    p,name1 = getname(string,p)
+    p,name2 = getname(string,p)
+    serial = struct.unpack(">HH",string[p:p+4])[0]
+    refresh = struct.unpack(">HH",string[p+4:p+8])[0]
+    retry = struct.unpack(">HH",string[p+8:p+12])[0]
+    expire = struct.unpack(">HH",string[p+12:p+16])[0]
+    minimum = struct.unpack(">HH",string[p+16:p+20])[0]
+    dat  = (name1,name2,serial,refresh,retry,expire,minimum)
+  if typ not in [1,2,6,15]:
     dat = struct.unpack("B"*datalen,string[p:(p+datalen)])
   p=p+datalen
   return p,name,typ,clas,ttlcpl[0]*256+ttlcpl[1],datalen,dat

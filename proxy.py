@@ -161,7 +161,7 @@ def dnsPacketAnswer(request,records):
 
 
     for answer in records:
-      splitname=request[1].split('.')
+      splitname=answer[0].split('.')
       for c in splitname:
         data=data+struct.pack("B",len(c))
         for l in c:
@@ -177,9 +177,11 @@ def dnsPacketAnswer(request,records):
       data=data+struct.pack(">H",1)
 
       #reponse validity 
-      data=data+struct.pack(">H",0x00000258)
+      data=data+struct.pack(">HH",0x001,0x0248)
 
       if (recordIsFinal([answer])):
+        
+
 
         #addr length
         data=data+struct.pack(">H",0x0004)
@@ -191,7 +193,19 @@ def dnsPacketAnswer(request,records):
         data=data+struct.pack("B",int(addr[2]))
         data=data+struct.pack("B",int(addr[3]))
       else:
-        splitname=request[1].split('.')
+        #data length
+        #TODO: calc data len
+        splitAnsw = answer[-1].split('.')
+        dataLen = len(splitAnsw)+3
+        for part in splitAnsw:
+          dataLen = dataLen + len(part)
+  
+        data=data+struct.pack(">H",dataLen)
+
+        if (answer[2] == 'MX'):
+          data=data+struct.pack(">H",int(answer[3]))
+
+        splitname=answer[-1].split('.')
         for c in splitname:
           data=data+struct.pack("B",len(c))
           for l in c:
@@ -347,12 +361,12 @@ if __name__ == "__main__":
             (p,dommaineName,requestType,requestClass) = parseRequest(request,12)
             pathToBDD = '../etc/bind/db.static'
             records = []
-            domaineRecord = proxy.bddGetAnswer(dommaineName,proxy.numbertotype(requestType),pathToBDD,records)
+            domaineRecord = bddGetAnswer(dommaineName,numbertotype(requestType),pathToBDD,records)
 
-            if (len(domaineRecord) > 0):
+            if domaineRecord and (len(domaineRecord) > 0):
                 print "réponse trouvé en cache !"
                 answer = domaineRecord
-                rawBytesAnswer = proxy.dnsPacketAnswer([p,dommaineName,requestType,requestClass],domaineRecord)
+                rawBytesAnswer = dnsPacketAnswer([p,dommaineName,requestType,requestClass],domaineRecord)
 
                 #la requete est traiter en internet, la reponse correspond forcement
                 idMatch = 1
