@@ -31,6 +31,9 @@ import random
 ########## constant
 DEFAULT_DNS_PORT = 53
 
+"""vrai si les requestes doivent etre compréssées"""
+COMPRESS_RECORDS = 1
+
 ########## class
 class HTTPRequest(BaseHTTPRequestHandler):
     def __init__(self, request_text):
@@ -47,7 +50,7 @@ class HTTPRequest(BaseHTTPRequestHandler):
 def bddGetAnswer(dommaineName,requestType,pathToBDD,recordsAnswer):
     """
     consulte une base de données d'enregistrements DNS placée dans le fichier "boxa/etc/bind/db/static"
-    return un tablea de la forme tabl = ["cold.net","MX","5","smtp.cold.net"]
+    return un tableau de la forme tabl = ["cold.net","MX","5","smtp.cold.net"]
     """
 
     resolvconf = open(pathToBDD, "r")
@@ -79,7 +82,6 @@ def bddGetAnswer(dommaineName,requestType,pathToBDD,recordsAnswer):
         return recordsAnswer
       else:
         recordsAnswer.append(records[0])
-        #TODO: champs additionnel type A ?
         return bddGetAnswer(records[0][-1],"A",pathToBDD,recordsAnswer)
 
 
@@ -124,6 +126,10 @@ def generateID():
     return generatedId
 
 def recordIsFinal(record):
+  """
+  annonce si le record point vers un autre nom de domaine ou s'il est "final" (point vers une addresse ip)
+  """
+  #TODO: type A => record IPv4
   return (len(record[0][-1].split('.'))==4 and int(record[0][-1].split('.')[0]))
 
 def dnsPacketAnswer(request,records):
@@ -135,7 +141,7 @@ def dnsPacketAnswer(request,records):
     data=data+struct.pack(">H",0x8580)
     #QDCOUNT sur 2 octets
     data=data+struct.pack(">H",1) #One question follows
-    data=data+struct.pack(">H",len(records)) #TODO: 0 answer follows
+    data=data+struct.pack(">H",len(records)) #x answers follows
     data=data+struct.pack(">H",0) #Autority RRs
     data=data+struct.pack(">H",0) #Additional RRs
 
@@ -154,13 +160,73 @@ def dnsPacketAnswer(request,records):
 
     ######## ANSWER
 
-    #name is pointer 
-    #data=data+struct.pack(">H",0xc)
-    #pointer is to the name of offset 12
-    #data=data+struct.pack(">H",0x00c)
+    
+    if COMPRESS_RECORDS:
+      data = buildCompressedAnswer(data,records)
+    else:
+      data = buildUncompressedAnswer(data,records)
+    
+
+    #TODO: peux prioritaire, compression nom de domaine, relir sujet
+    return data
+
+def buildCompressedAnswer(data,records):
+  answerPos = 12
+  for answer in records:
+    
+      #name is pointer 
+      #data=data+struct.pack("h",0b11)
+      #pointer is to the name of offset answerPos
+      data=data+struct.pack(">H",49152+answerPos)
 
 
-    for answer in records:
+      #answer type
+      data=data+struct.pack(">H",typenumber(answer[2]))
+
+      #answer class
+      #CLASS 1 (IN) par defaut
+      data=data+struct.pack(">H",1)
+
+      #TTL 
+      data=data+struct.pack(">HH",0x001,0x0248)
+
+      if (recordIsFinal([answer])):
+        
+
+
+        #addr length
+        dataLen = 4
+        data=data+struct.pack(">H",0x0004)
+
+        #addresse
+        addr = answer[-1].split('.')
+        data=data+struct.pack("B",int(addr[0]))
+        data=data+struct.pack("B",int(addr[1]))
+        data=data+struct.pack("B",int(addr[2]))
+        data=data+struct.pack("B",int(addr[3]))
+      else:
+        #data length
+        splitAnsw = answer[-1].split('.')
+        dataLen = len(splitAnsw)+3
+        for part in splitAnsw:
+          dataLen = dataLen + len(part)
+  
+        data=data+struct.pack(">H",dataLen)
+
+        if (answer[2] == 'MX'):
+          data=data+struct.pack(">H",int(answer[3]))
+
+        splitname=answer[-1].split('.')
+        for c in splitname:
+          data=data+struct.pack("B",len(c))
+          for l in c:
+            data=data+struct.pack("c",l)
+        data=data+struct.pack("B",0)
+      answerPos += dataLen+10
+  return data
+
+def buildUncompressedAnswer(data,records):
+  for answer in records:
       splitname=answer[0].split('.')
       for c in splitname:
         data=data+struct.pack("B",len(c))
@@ -194,7 +260,6 @@ def dnsPacketAnswer(request,records):
         data=data+struct.pack("B",int(addr[3]))
       else:
         #data length
-        #TODO: calc data len
         splitAnsw = answer[-1].split('.')
         dataLen = len(splitAnsw)+3
         for part in splitAnsw:
@@ -211,11 +276,8 @@ def dnsPacketAnswer(request,records):
           for l in c:
             data=data+struct.pack("c",l)
         data=data+struct.pack("B",0)
+  return data
 
-    #TODO: peux prioritaire, compression nom de domaine, relir sujet
-    return data
-
-    
 def bin(x):
     """
     bin(number) -> string
@@ -363,7 +425,7 @@ if __name__ == "__main__":
             records = []
             domaineRecord = bddGetAnswer(dommaineName,numbertotype(requestType),pathToBDD,records)
 
-            if domaineRecord and (len(domaineRecord) > 0):
+            if domaineRecord and (len(domaineRecord) > 0) and recordIsFinal(domaineRecord[-1]):
                 print "réponse trouvé en cache !"
                 answer = domaineRecord
                 rawBytesAnswer = dnsPacketAnswer([p,dommaineName,requestType,requestClass],domaineRecord)
@@ -388,7 +450,6 @@ if __name__ == "__main__":
                 # Une fois la réponse DNS obtenue du résolveur, le message doit être transmis au client via une réponse HTTP.
                 max_bytes = 4096
                 #TODO: pas de reponse du dns
-                #TODO: le DNS ne trouve pas la rep a la querry
                 print "attente d'une reponse du serveur DNS.."
                 
                 (rawBytesAnswer,src_addr) = dnsSocket.recvfrom(max_bytes)

@@ -93,6 +93,3 @@ if __name__ == "__main__":
 
   print "./senddns.py -t MX cold.net \t utilise cache avec champ additionel"
   test("AAABAAABAAAAAAAABGNvbGQDbmV0AAAPAAE=")
-
-  #TODO: print "./senddns.py -t NS blue.net \t n'utilise pas le cache et champ additionnel "
-  #TODO: test("AAABAAABAAAAAAAABGJsdWUDbmV0AAACAAE=")
