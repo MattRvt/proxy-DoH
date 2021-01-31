@@ -12,5 +12,4 @@ Etudiants en L3 informatique - MIAGE :
 - [***RIVAT Matthis***](https://github.com/MattRvt)
 
 ## Fait à 
-**Université d'Orléans,
-Département Informatique**
+**Université d'Orléans**
